@@ -1,0 +1,23 @@
+# Default values for the Agent Tincan catalog app. These mirror
+# questions.yaml: every value here is a default the install wizard can
+# override. Rendered into templates/docker-compose.yaml by ix-lib.
+images:
+  image:
+    repository: ghcr.io/anthonypdawson/agent-tincan
+    tag: "latest"
+
+consts:
+  relay_container_name: agent-tincan-relay
+  agent_container_name: agent-tincan-agent
+  state_path: /state
+
+tincan:
+  mode: relay
+  admin_machine: ""
+  ts_authkey: ""
+
+storage:
+  state:
+    type: ix_volume
+    ix_volume_config:
+      dataset_name: state

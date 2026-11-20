@@ -1,0 +1,81 @@
+# Build the multi-arch Agent Tincan image and publish it to GHCR.
+#
+# Triggers:
+# - Push to the initial branch (and later main) builds and pushes `latest`
+#   plus a tag for the tincan version in the Dockerfile.
+# - Pushing a version tag (vX.Y.Z) builds and pushes that tag.
+# - Pull requests build only, to validate the Dockerfile.
+#
+# The image is built from the upstream release binary (see Dockerfile).
+# TINCAN_VERSION defaults to the version in the Dockerfile; the workflow
+# does not pin a version itself, so bump the Dockerfile ARG to track a
+# new upstream release.
+
+name: docker
+
+on:
+  push:
+    branches:
+      - initial
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - initial
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Read Tincan version from the Dockerfile
+        id: tincan
+        run: |
+          version=$(grep -m1 '^ARG TINCAN_VERSION=' Dockerfile | cut -d= -f2)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Tincan version: $version"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/anthonypdawson/agent-tincan
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.tincan.outputs.version }}
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            TINCAN_VERSION=${{ steps.tincan.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,43 @@
+{# Agent Tincan catalog template (Route B).
+   Rendered by TrueNAS catalog CI with Jinja2 plus the ix-lib render
+   library. ix-lib is vendored by the catalog CI at build time and is NOT
+   committed here. Render-validate this template on the target TrueNAS
+   version before publishing: the ix-lib schema dialect drifts between
+   releases, and a template that renders on one version may not render
+   on another. #}
+{% set tpl = ix_lib.base.render.Render(values) %}
+
+{% if values.tincan.mode == "relay" %}
+  {% set c1 = tpl.add_container(values.consts.relay_container_name, "image") %}
+
+  {% do c1.environment.add_env("TS_AUTHKEY", values.tincan.ts_authkey) %}
+
+  {# The relay command. --admin takes one machine name per flag; the
+     wizard collects a comma-separated list and splits it here. The relay
+     host itself is always an admin with no flags. --dist and
+     --release-url are what make `tincan relay-upgrade --from-github`
+     work, so upgrades do not need a new image. #}
+  {% set relay_cmd = ["relay", "--state-dir", values.consts.state_path, "--dist", values.consts.state_path ~ "/dist", "--release-url", "https://github.com/mvanhorn/agent-tincan/releases/download"] %}
+  {% for admin in values.tincan.admin_machine.split(",") %}
+    {% if admin.strip() %}
+      {% do relay_cmd.extend(["--admin", admin.strip()]) %}
+    {% endif %}
+  {% endfor %}
+  {% do c1.set_command(relay_cmd) %}
+
+  {% do c1.add_storage(values.consts.state_path, values.storage.state) %}
+{% else %}
+  {# Agent mode (phase two). Same image, different command, its own
+     state volume. Join is a two-step process: the invite code is
+     short-lived (10 minutes), so it is supplied after install, not by
+     this wizard. See TRUENAS.md. #}
+  {% set c1 = tpl.add_container(values.consts.agent_container_name, "image") %}
+
+  {% do c1.environment.add_env("TS_AUTHKEY", values.tincan.ts_authkey) %}
+
+  {% do c1.set_command(["join", "--relay", "http://tincan-relay", "--state-dir", values.consts.state_path]) %}
+
+  {% do c1.add_storage(values.consts.state_path, values.storage.state) %}
+{% endif %}
+
+{{ tpl.render() | tojson }}

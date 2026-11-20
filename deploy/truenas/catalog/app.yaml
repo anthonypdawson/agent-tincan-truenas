@@ -1,0 +1,26 @@
+# Catalog metadata for the Agent Tincan TrueNAS app.
+# This is the formal catalog route (Route B). It is published by PR to
+# the official truenas/apps repo; there is no third-party catalog
+# mechanism in TrueNAS SCALE 24.10+.
+annotations:
+  min_scale_version: 24.10.2.2
+app_version: 0.28.2
+categories:
+- networking
+changelog_url: https://github.com/mvanhorn/agent-tincan/releases
+date_added: '2026-11-20'
+description: Let your AI agents ask each other for help, over Tailscale. A small relay on your Tailscale network; every agent dials out to it, so nothing needs an open port. Relay mode by default, agent mode as an option.
+home: https://agenttincan.com/
+icon: https://raw.githubusercontent.com/mvanhorn/agent-tincan/main/site/favicon.svg
+maintainers:
+- email: anthonypdawson@users.noreply.github.com
+  name: anthonypdawson
+  url: https://github.com/anthonypdawson/agent-tincan-truenas
+name: agent-tincan
+sources:
+- https://github.com/anthonypdawson/agent-tincan-truenas
+- https://ghcr.io/anthonypdawson/agent-tincan
+- https://github.com/mvanhorn/agent-tincan
+title: Agent Tincan
+train: community
+version: 1.0.0

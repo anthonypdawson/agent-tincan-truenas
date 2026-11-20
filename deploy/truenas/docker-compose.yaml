@@ -1,0 +1,75 @@
+# Agent Tincan on TrueNAS SCALE (24.10+) — Route A: paste-compose.
+#
+# Install: Apps -> Discover Apps -> Install via YAML, paste this file,
+# then edit the three placeholders below (TS_AUTHKEY, --admin, and the
+# state dataset path). See deploy/truenas/TRUENAS.md for the full runbook.
+#
+# The relay brings its own Tailscale node (tsnet is built into the
+# binary), so nothing is exposed on the LAN and no host Tailscale install
+# is needed. The container only needs outbound internet to reach the
+# Tailscale control plane.
+
+services:
+  relay:
+    image: ghcr.io/anthonypdawson/agent-tincan:latest
+    container_name: agent-tincan-relay
+    restart: unless-stopped
+    environment:
+      # One-time Tailscale auth key for the first join. After the relay
+      # has joined, its node identity lives in the state dir and the key
+      # is no longer needed. Generate one at
+      # https://login.tailscale.com/admin/settings/keys (reusable or
+      # single-use; tag it if you tag agent machines). Replace the value
+      # below with your key. Do not commit a real key to a repo.
+      TS_AUTHKEY: "tskey-auth-REPLACE-ME"
+    command:
+      - relay
+      - --state-dir
+      - /state
+      - --dist
+      - /state/dist
+      - --release-url
+      - https://github.com/mvanhorn/agent-tincan/releases/download
+      # Admin machines allowed to invite and remove agents, by Tailscale
+      # machine name as shown by `tailscale status`. Replace my-laptop
+      # with your admin machine name(s); repeat --admin for more than
+      # one. The relay host itself is always an admin with no flags.
+      - --admin
+      - my-laptop
+    volumes:
+      # Persistent relay state. Replace /mnt/tank/apps/tincan-relay with
+      # your dataset path. This holds relay.db, relay.key, invite-pepper,
+      # wake.json, approval.json, the attachments directory, and the
+      # Tailscale node state. It MUST survive app updates and restarts:
+      # TrueNAS wipes files inside a container on update, so the state
+      # dir must be a mounted dataset, not container-local storage.
+      # Back it up like any database.
+      - /mnt/tank/apps/tincan-relay:/state
+
+  # Agent mode (phase two). Same image, different command, its own state
+  # volume. This runs an agent on the NAS itself, for example a web agent
+  # or a local agent that lives next to the relay. Join is a two-step
+  # process and the invite code is short-lived (10 minutes), so this is
+  # not a one-shot install the way the relay is. See TRUENAS.md.
+  #
+  # agent:
+  #   image: ghcr.io/anthonypdawson/agent-tincan:latest
+  #   container_name: agent-tincan-agent
+  #   restart: unless-stopped
+  #   environment:
+  #     TS_AUTHKEY: "tskey-auth-REPLACE-ME"
+  #   # Step 1 (one-time, from the relay host or an admin device):
+  #   #   tincan invite <name> --kind <kind>
+  #   # Step 2: run this service with the invite code, then onboard it:
+  #   #   docker exec agent-tincan-agent tincan onboard --section agents
+  #   # The agent's config (client.json) and data live in its own state
+  #   # volume. It must NOT share the relay's state dir.
+  #   command:
+  #     - join
+  #     - INVITE-CODE-REPLACE-ME
+  #     - --relay
+  #     - http://tincan-relay
+  #     - --state-dir
+  #     - /state
+  #   volumes:
+  #     - /mnt/tank/apps/tincan-agent:/state

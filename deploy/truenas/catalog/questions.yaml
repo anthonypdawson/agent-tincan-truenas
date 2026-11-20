@@ -1,0 +1,146 @@
+# Install wizard for the Agent Tincan TrueNAS app (Route B, catalog app).
+# Groups and questions follow the TrueNAS catalog schema. Secrets are
+# marked `private: true` so the UI masks them.
+groups:
+  - name: Agent Tincan Configuration
+    description: Configure Agent Tincan
+  - name: Storage Configuration
+    description: Configure Storage for Agent Tincan
+
+questions:
+  - variable: tincan
+    label: ""
+    group: Agent Tincan Configuration
+    schema:
+      type: dict
+      attrs:
+        - variable: mode
+          label: Mode
+          description: |
+            relay: Run the Tincan relay. This is the default and what most
+            people want. The relay is the always-on hub every agent dials
+            out to, and it joins your tailnet as tincan-relay.</br>
+            agent: Run an agent on the NAS itself (phase two). The agent
+            joins an existing relay with a short-lived invite code.
+          schema:
+            type: string
+            required: true
+            default: "relay"
+            enum:
+              - value: "relay"
+                description: Relay (default)
+              - value: "agent"
+                description: Agent (phase two)
+
+        - variable: admin_machine
+          label: Admin Machine Name
+          description: |
+            Tailscale machine name(s) allowed to invite and remove agents,
+            as shown by `tailscale status`. Separate multiple names with a
+            comma. The relay host itself is always an admin with no flags,
+            so this is only for other admin machines.
+          schema:
+            type: string
+            default: ""
+
+        - variable: ts_authkey
+          label: Tailscale Auth Key
+          description: |
+            One-time Tailscale auth key for the relay's first join. After
+            the relay has joined, its node identity lives in the state
+            dir and the key is no longer needed. Generate one at
+            https://login.tailscale.com/admin/settings/keys
+          schema:
+            type: string
+            default: ""
+            required: true
+            private: true
+
+  - variable: storage
+    label: ""
+    group: Storage Configuration
+    schema:
+      type: dict
+      attrs:
+        - variable: state
+          label: Relay State Storage
+          description: |
+            The relay's state dir: relay.db, relay.key, invite-pepper,
+            wake.json, approval.json, the attachments directory, and the
+            Tailscale node state. It MUST survive app updates and
+            restarts, so use a dataset, not container-local storage.
+            To migrate an existing relay, point this at the dataset
+            holding its current state dir (see TRUENAS.md).
+          schema:
+            type: dict
+            attrs:
+              - variable: type
+                label: Type
+                description: |
+                  ixVolume: Is dataset created automatically by the system.</br>
+                  Host Path: Is a path that already exists on the system.
+                schema:
+                  type: string
+                  required: true
+                  default: "ix_volume"
+                  enum:
+                    - value: "host_path"
+                      description: Host Path (Path that already exists on the system)
+                    - value: "ix_volume"
+                      description: ixVolume (Dataset created automatically by the system)
+              - variable: ix_volume_config
+                label: ixVolume Configuration
+                description: The configuration for the ixVolume dataset.
+                schema:
+                  type: dict
+                  show_if: [["type", "=", "ix_volume"]]
+                  $ref:
+                    - "normalize/ix_volume"
+                  attrs:
+                    - variable: acl_enable
+                      label: Enable ACL
+                      description: Enable ACL for the storage.
+                      schema:
+                        type: boolean
+                        default: false
+                    - variable: dataset_name
+                      label: Dataset Name
+                      description: The name of the dataset to use for storage.
+                      schema:
+                        type: string
+                        required: true
+                        hidden: true
+                        default: "state"
+                    - variable: acl_entries
+                      label: ACL Configuration
+                      schema:
+                        type: dict
+                        show_if: [["acl_enable", "=", true]]
+                        attrs: []
+              - variable: host_path_config
+                label: Host Path Configuration
+                schema:
+                  type: dict
+                  show_if: [["type", "=", "host_path"]]
+                  attrs:
+                    - variable: acl_enable
+                      label: Enable ACL
+                      description: Enable ACL for the storage.
+                      schema:
+                        type: boolean
+                        default: false
+                    - variable: acl
+                      label: ACL Configuration
+                      schema:
+                        type: dict
+                        show_if: [["acl_enable", "=", true]]
+                        attrs: []
+                        $ref:
+                          - "normalize/acl"
+                    - variable: path
+                      label: Host Path
+                      description: The path to the dataset holding the relay state.
+                      schema:
+                        type: string
+                        required: true
+                        default: "/mnt/tank/apps/tincan-relay"
